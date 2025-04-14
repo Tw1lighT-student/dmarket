@@ -1,0 +1,15 @@
+# Базы данных
+*.db
+db/
+
+# Логи
+*.log
+
+# Кэш Python
+__pycache__/
+*.pyc
+
+# Среды
+.env
+.venv/
+venv/

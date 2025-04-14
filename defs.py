@@ -23,13 +23,14 @@ def delete_data_base(username):
         cursor = db.cursor()
         cursor.execute("""DROP TABLE IF EXISTS items""")
 
-def add_item_to_base(title, exterior, item_float, pattern, float_range, category_pattern, tier_pattern, count_sales, stickers, source_steam, item_picture, price, created_at, offer_id, username):
-    insert_item = [title, exterior, item_float, pattern, float_range, category_pattern, tier_pattern, count_sales, stickers, source_steam, item_picture, price, '', created_at, offer_id]
+def add_item_to_base(title, title_clean, exterior, item_float, pattern, float_range, category_pattern, tier_pattern, count_sales, stickers, source_steam, item_picture, price, created_at, offer_id, username):
+    insert_item = [title, title_clean, exterior, item_float, pattern, float_range, category_pattern, tier_pattern, count_sales, stickers, source_steam, item_picture, price, '', created_at, offer_id]
 
     with sqlite3.connect(f'db/dmarket_data_base_{username}.db', timeout=10) as db:
         cursor = db.cursor()
         query = """ CREATE TABLE IF NOT EXISTS items(
             title TEXT NOT NULL,
+            title_clean TEXT,
             exterior TEXT,
             item_float REAL,
             pattern INTEGER,
@@ -45,7 +46,7 @@ def add_item_to_base(title, exterior, item_float, pattern, float_range, category
             created_at TEXT,
             offer_id TEXT
         )"""
-        query_add_item = '''INSERT INTO items(title, exterior, item_float, pattern, float_range, category_pattern, tier_pattern, count_sales, stickers, source_steam, item_picture, price, time_on_sale_days, created_at, offer_id) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'''
+        query_add_item = '''INSERT INTO items(title, title_clean, exterior, item_float, pattern, float_range, category_pattern, tier_pattern, count_sales, stickers, source_steam, item_picture, price, time_on_sale_days, created_at, offer_id) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'''
 
         cursor.execute(query)
         cursor.execute(query_add_item, insert_item)
@@ -87,7 +88,7 @@ def check_float_level(item_float):
     setup_logging()
     local_logger = logging.getLogger(__name__)
     local_logger.debug(f'Принял на обработку флоат {item_float}')
-    factory_new = [0, 0.0001, 0.0002, 0.0003, 0.0007, 0.001, 0.002, 0.003, 0.007, 0.01]
+    factory_new = [0, 0.00001, 0.00003, 0.00007, 0.0001, 0.0002, 0.0003, 0.0007, 0.001, 0.002, 0.003, 0.007, 0.01]
     minimal_wear = [0.07, 0.071, 0.075, 0.08]
     field_tested = [0.15, 0.151, 0.155, 0.16, 0.18, 0.21]
     well_worn = [0.38, 0.39]

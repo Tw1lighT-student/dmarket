@@ -88,14 +88,14 @@ def check_show_case(showcase, username):
             created_at = item['createdAt']
             # created_at = datetime.fromtimestamp(item['createdAt'])
             # time_on_sale_days = (datetime.now() - created_at).days
-            logger.debug(f'Данные со скина получили: {clean_title, exterior, item_float, pattern, float_range, category_pattern, tier_pattern, count_sales, stickers, source_steam, item_picture, price, created_at, offer_id, username}')
+            logger.debug(f'Данные со скина получили: {title, clean_title, exterior, item_float, pattern, float_range, category_pattern, tier_pattern, count_sales, stickers, source_steam, item_picture, price, created_at, offer_id, username}')
 
-            add_item_to_base(clean_title, exterior.replace('-', ' ').title(), item_float, pattern, float_range, category_pattern, tier_pattern, count_sales, stickers, source_steam, item_picture, price, created_at, offer_id, username)
+            add_item_to_base(title, clean_title, exterior.replace('-', ' ').title(), item_float, pattern, float_range, category_pattern, tier_pattern, count_sales, stickers, source_steam, item_picture, price, created_at, offer_id, username)
     end_time = time.time()
     elapsed_time = end_time - start_time
-    print('Elapsed time: ', elapsed_time)
+    logger.debug(f'Elapsed time: {elapsed_time}')
 
-accounts = {'hard2sell_acc': '0x6b475B3Ec5Ec9e485b235aA75B143f968A924000'} # 'main_acc': '0xd7a144590910F84BB2eC80162c9e45239E83148b'
+accounts = {'hard2sell_acc': '0x6b475B3Ec5Ec9e485b235aA75B143f968A924000', 'main_acc': '0xd7a144590910F84BB2eC80162c9e45239E83148b'}
 
 for acc in accounts:
     check_show_case(accounts[acc], acc)
