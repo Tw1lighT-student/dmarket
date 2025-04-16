@@ -12,7 +12,7 @@ from dotenv import load_dotenv
 from defs import check_float_level, check_pattern
 
 check_item_final = []
-check_item = ['MP9 | Starlight Protector', 'AWP | Acheron', 'P250 | Nevermore']
+check_item = ['MP9 | Starlight Protector', 'AWP | Acheron', 'P250 | Nevermore', 'AK-47 | Elite Build']
 
 load_dotenv()
 
