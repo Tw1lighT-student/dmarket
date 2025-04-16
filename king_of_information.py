@@ -22,15 +22,15 @@ secret_key = os.getenv("SECRET_KEY_HARD2SELL")
 def add_item_to_base(title, item_float, pattern, float_range, category_pattern, tier_pattern, price, closed_at, cursor, first_parsed_unix):
     insert_item = [title, item_float, pattern, float_range, category_pattern, tier_pattern, price, closed_at]
 
-    query_add_item = '''INSERT INTO items(title, item_float, pattern, float_range, category_pattern, tier_pattern, price, closed_at) VALUES(?, ?, ?, ?, ?, ?, ?, ?)'''
+    if item_float == '' and pattern == '':
+        query_add_item = '''INSERT INTO items(title, item_float, pattern, float_range, category_pattern, tier_pattern, price, closed_at) VALUES(?, ?, ?, ?, ?, ?, ?, ?)'''
+        cursor.execute(query_add_item, insert_item)
 
     cursor.execute("""
         INSERT INTO items_check(title, first_parsed_unix)
         VALUES(?, ?)
         ON CONFLICT(title) DO UPDATE SET first_parsed_unix = excluded.first_parsed_unix
     """, (title, first_parsed_unix))
-
-    cursor.execute(query_add_item, insert_item)
 
 def check_first_price_dmarket(item_name):
     price = 0
@@ -113,22 +113,39 @@ def get_special_sales(item_title_clean, price_first_item, item_title, public_key
 
     count_sales = 0
     # pprint(market_response)
-    first_parsed_unix = market_response['sales'][0]['date']
+    # first_parsed_unix = market_response['sales'][0]['date']
+
+    cursor.execute('''
+               SELECT first_parsed_unix
+               FROM items_check
+               WHERE title = ?
+           ''', (item_title, ))
+
+    first_parsed_unix = cursor.fetchone()
+    if first_parsed_unix:
+        first_parsed_unix = first_parsed_unix[0]
+    else:
+        first_parsed_unix = 0  # или None
+
+    print(first_parsed_unix)
     for item in market_response['sales']:
-        if float(item['price']) >= price_first_item * 2:
-            if item['offerAttributes']:
-                if item['offerAttributes'].get('floatValue', ''):
-                    min_float, max_float = check_float_level(item['offerAttributes']['floatValue'])
-                    if min_float:
-                        float_range = f'{min_float} - {max_float}'
-                        item_float = item['offerAttributes']['floatValue']
+        count_sales = 0
+        if float(item['price']) >= price_first_item * 2 and int(first_parsed_unix) <= int(item['date']) and item['offerAttributes'].get('floatValue', ''):
+            count_sales += 1
+            min_float, max_float = check_float_level(item['offerAttributes']['floatValue'])
+            if min_float:
+                float_range = f'{min_float} - {max_float}'
+                item_float = item['offerAttributes']['floatValue']
 
-                if len(item['offerAttributes']) == 2:
-                    print(item_title, item['price'], item['offerAttributes'].get('paintSeed', ''), item['offerAttributes']['floatValue'], datetime.fromtimestamp(int(item['date'])))
-                    category_pattern, tier_pattern, patterns = check_pattern(item_title_clean, int(item['offerAttributes']['paintSeed']))
+            if len(item['offerAttributes']) == 2:
+                category_pattern, tier_pattern, patterns = check_pattern(item_title_clean, int(item['offerAttributes']['paintSeed']))
 
-                add_item_to_base(item_title, item_float, item['offerAttributes'].get('paintSeed', ''), float_range, category_pattern, tier_pattern, item['price'], datetime.fromtimestamp(int(item['date'])), cursor, first_parsed_unix)
-        # if unix_limit_time < float(item['date']):
+            add_item_to_base(item_title, item_float, item['offerAttributes'].get('paintSeed', ''), float_range, category_pattern, tier_pattern, item['price'], datetime.fromtimestamp(int(item['date'])), cursor, int(time.time()))
+
+    if count_sales == 0:
+        add_item_to_base(item_title, '', '', '',
+                         '', '', '', '',
+                         cursor, int(time.time()))
 
 
 def setup_logging():
@@ -142,13 +159,17 @@ def setup_logging():
     )
 
 def main():
+    global first_run  # указываем, что используем глобальный флаг
     setup_logging()
     logger = logging.getLogger(__name__)
 
     with sqlite3.connect('db/dmarket_database_big_items.db', timeout=10) as db:
         cursor = db.cursor()
 
-        cursor.execute("DROP TABLE IF EXISTS items")
+        if first_run:
+            cursor.execute("DROP TABLE IF EXISTS items")
+            cursor.execute("DROP TABLE IF EXISTS items_check")
+            first_run = False  # следующий заход будет "не первый"
         # Создание таблицы один раз
         cursor.execute("""CREATE TABLE IF NOT EXISTS items(
             title TEXT NOT NULL,
@@ -161,7 +182,6 @@ def main():
             closed_at TEXT
         )""")
 
-        cursor.execute("DROP TABLE IF EXISTS items_check")
         cursor.execute(""" CREATE TABLE IF NOT EXISTS items_check(
             title TEXT NOT NULL UNIQUE,
             first_parsed_unix INTEGER
@@ -177,10 +197,10 @@ def main():
 
                     # if objects:
                     #     check_item.append(i + exterior)
-        cursor.execute("SELECT COUNT(*) FROM items")
-        print("Добавлено строк в items:", cursor.fetchone()[0])
         db.commit()
 
 if __name__ == "__main__":
-    pprint('')
-    main()
+    first_run = True
+    while True:
+        main()
+        time.sleep(21600)
