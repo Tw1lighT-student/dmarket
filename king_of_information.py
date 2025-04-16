@@ -12,35 +12,25 @@ from dotenv import load_dotenv
 from defs import check_float_level, check_pattern
 
 check_item_final = []
-check_item = ['MP9 | Starlight Protector', 'AWP | Acheron', 'P250 | Nevermore', 'AK-47 | Elite Build']
+check_item = ['MP9 | Starlight Protector', 'AWP | Acheron']
 
 load_dotenv()
 
 public_key = 'b44b84488268b45ba3342cff2dbcef43c3d78b35b8d622b069ab3745a0157319'
 secret_key = os.getenv("SECRET_KEY_HARD2SELL")
 
-def add_item_to_base(title, item_float, pattern, float_range, category_pattern, tier_pattern, price, closed_at):
+def add_item_to_base(title, item_float, pattern, float_range, category_pattern, tier_pattern, price, closed_at, cursor, first_parsed_unix):
     insert_item = [title, item_float, pattern, float_range, category_pattern, tier_pattern, price, closed_at]
 
-    with sqlite3.connect(f'db/dmarket_database_big_items.db', timeout=10) as db:
-        cursor = db.cursor()
-        query = """ CREATE TABLE IF NOT EXISTS items(
-            title TEXT NOT NULL,
-            item_float TEXT,
-            pattern INTEGER,
-            float_range TEXT,
-            category_pattern TEXT, 
-            tier_pattern INTEGER,
-            price REAL,
-            closed_at TEXT
-        )"""
+    query_add_item = '''INSERT INTO items(title, item_float, pattern, float_range, category_pattern, tier_pattern, price, closed_at) VALUES(?, ?, ?, ?, ?, ?, ?, ?)'''
 
+    cursor.execute("""
+        INSERT INTO items_check(title, first_parsed_unix)
+        VALUES(?, ?)
+        ON CONFLICT(title) DO UPDATE SET first_parsed_unix = excluded.first_parsed_unix
+    """, (title, first_parsed_unix))
 
-        query_add_item = '''INSERT INTO items(title, item_float, pattern, float_range, category_pattern, tier_pattern, price, closed_at) VALUES(?, ?, ?, ?, ?, ?, ?, ?)'''
-
-        cursor.execute(query)
-        cursor.execute(query_add_item, insert_item)
-        db.commit()
+    cursor.execute(query_add_item, insert_item)
 
 def check_first_price_dmarket(item_name):
     price = 0
@@ -74,7 +64,7 @@ def check_first_price_dmarket(item_name):
 
     return price
 
-def get_special_sales(item_title_clean, price_first_item, item_title, public_key, secret_key):
+def get_special_sales(item_title_clean, price_first_item, item_title, public_key, secret_key, cursor):
     params = {
         'gameId': "a8db",
         'txOperationType': 'Offer',
@@ -122,7 +112,8 @@ def get_special_sales(item_title_clean, price_first_item, item_title, public_key
         local_logger.warning(f'Ошибка с взаимодействием сайта: {market_response}')
 
     count_sales = 0
-    pprint(market_response)
+    # pprint(market_response)
+    first_parsed_unix = market_response['sales'][0]['date']
     for item in market_response['sales']:
         if float(item['price']) >= price_first_item * 2:
             if item['offerAttributes']:
@@ -136,11 +127,9 @@ def get_special_sales(item_title_clean, price_first_item, item_title, public_key
                     print(item_title, item['price'], item['offerAttributes'].get('paintSeed', ''), item['offerAttributes']['floatValue'], datetime.fromtimestamp(int(item['date'])))
                     category_pattern, tier_pattern, patterns = check_pattern(item_title_clean, int(item['offerAttributes']['paintSeed']))
 
-                add_item_to_base(item_title, item_float, item['offerAttributes'].get('paintSeed', ''), float_range, category_pattern, tier_pattern, item['price'], datetime.fromtimestamp(int(item['date'])))
+                add_item_to_base(item_title, item_float, item['offerAttributes'].get('paintSeed', ''), float_range, category_pattern, tier_pattern, item['price'], datetime.fromtimestamp(int(item['date'])), cursor, first_parsed_unix)
         # if unix_limit_time < float(item['date']):
-        pass
 
-    return count_sales
 
 def setup_logging():
     logging.basicConfig(
@@ -156,17 +145,41 @@ def main():
     setup_logging()
     logger = logging.getLogger(__name__)
 
-    for item in check_item:
-        for i in [item, 'StatTrak™ ' + item]:
-            for exterior in ['(Factory New)', '(Minimal Wear)', '(Field-Tested)', '(Battle-Scarred)']:
-                price_first_item = check_first_price_dmarket(i + exterior)
-                if price_first_item != 0:
-                    get_special_sales(item, price_first_item, i + ' ' + exterior, public_key, secret_key)
-                    print(i + ' ' + exterior)
-                    print(price_first_item)
+    with sqlite3.connect('db/dmarket_database_big_items.db', timeout=10) as db:
+        cursor = db.cursor()
 
-                # if objects:
-                #     check_item.append(i + exterior)
+        cursor.execute("DROP TABLE IF EXISTS items")
+        # Создание таблицы один раз
+        cursor.execute("""CREATE TABLE IF NOT EXISTS items(
+            title TEXT NOT NULL,
+            item_float TEXT,
+            pattern INTEGER,
+            float_range TEXT,
+            category_pattern TEXT, 
+            tier_pattern INTEGER,
+            price REAL,
+            closed_at TEXT
+        )""")
+
+        cursor.execute("DROP TABLE IF EXISTS items_check")
+        cursor.execute(""" CREATE TABLE IF NOT EXISTS items_check(
+            title TEXT NOT NULL UNIQUE,
+            first_parsed_unix INTEGER
+        )""")
+
+        for item in check_item:
+            for i in [item, 'StatTrak™ ' + item]:
+                for exterior in ['(Factory New)', '(Minimal Wear)', '(Field-Tested)', '(Battle-Scarred)']:
+                    price_first_item = check_first_price_dmarket(i + exterior)
+                    if price_first_item != 0:
+                        get_special_sales(item, price_first_item, i + ' ' + exterior, public_key, secret_key, cursor)
+
+
+                    # if objects:
+                    #     check_item.append(i + exterior)
+        cursor.execute("SELECT COUNT(*) FROM items")
+        print("Добавлено строк в items:", cursor.fetchone()[0])
+        db.commit()
 
 if __name__ == "__main__":
     main()
