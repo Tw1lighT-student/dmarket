@@ -51,24 +51,33 @@ from telebot import types
 
 @bot.message_handler(commands=["start"])
 def cmd_start(message):
-    markup = types.ReplyKeyboardMarkup(resize_keyboard=True, row_width=2)
-    btn_start = types.KeyboardButton("/start_parse")
-    btn_stop  = types.KeyboardButton("/stop_parse")
+    markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
 
-    # теперь чистые команды
-    btn_add   = types.KeyboardButton("/add_item")
-    btn_rem   = types.KeyboardButton("/remove_item")
+    # Ряды с по 2 кнопки
+    row1 = [
+        types.KeyboardButton("▶️ Старт парсинга"),
+        types.KeyboardButton("⏹️ Остановить парсинг")
+    ]
+    row2 = [
+        types.KeyboardButton("➕ Добавить предмет"),
+        types.KeyboardButton("🗑️ Удалить предмет")
+    ]
 
-    btn_show  = types.KeyboardButton("/show_items")
-    markup.add(btn_start, btn_stop, btn_show, btn_add, btn_rem)
+    # Отдельная широкая кнопка
+    show_btn = types.KeyboardButton("📋 Показать список предметов")
+
+    # Добавляем по строкам
+    markup.row(*row1)
+    markup.row(*row2)
+    markup.add(show_btn)  # занимает всю строку
+
     bot.send_message(
         message.chat.id,
-        "Выбери действие кнопкой (или введи вручную):",
+        "Выбери действие кнопками ниже:",
         reply_markup=markup
     )
 
-
-@bot.message_handler(commands=["start_parse"])
+@bot.message_handler(func=lambda m: m.text == "▶️ Старт парсинга")
 def handle_parse(message):
     global is_parsing, stop_parsing
     if is_parsing:
@@ -80,11 +89,12 @@ def handle_parse(message):
     bot.reply_to(message, "🚀 Постоянный парсинг запущен! Для остановки — /stop_parse")
 
     def loop_task():
-        global is_parsing
+        global is_parsing, stop_parsing
         try:
             while not stop_parsing:
                 bot.send_message(message.chat.id, f"🔥 Новая итерация парсинга: {time.ctime()}")
-                main()
+                check_items = load_check_items()
+                main(check_items)
                 # пауза между запусками (например, 6 часов)
                 for _ in range(6*60):  # проверяем флаг каждую секунду
                     if stop_parsing:
@@ -95,7 +105,7 @@ def handle_parse(message):
             bot.send_message(message.chat.id, "🛑 Парсинг окончательно остановлен.")
     threading.Thread(target=loop_task, daemon=True).start()
 
-@bot.message_handler(commands=["stop_parse"])
+@bot.message_handler(func=lambda m: m.text == "⏹️ Остановить парсинг")
 def handle_stop(message):
     global is_parsing, stop_parsing
     if not is_parsing:
@@ -103,7 +113,7 @@ def handle_stop(message):
     stop_parsing = True
     bot.reply_to(message, "⏹️ Останавливаю парсинг, сейчас поток завершится…")
 
-@bot.message_handler(commands=["add_item"])
+@bot.message_handler(func=lambda m: m.text == "➕ Добавить предмет")
 def cmd_add_start(message):
     # Шаг 1: спрашиваем, что добавить
     msg = bot.reply_to(message, "✏️ Введи название предмета который хочешь добавить, в формате: Weapon name | Skin name")
@@ -119,7 +129,7 @@ def process_add_item(message):
     else:
         bot.reply_to(message, f"⚠️ «{item}» уже в списке.")
 
-@bot.message_handler(commands=["remove_item"])
+@bot.message_handler(func=lambda m: m.text == "🗑️ Удалить предмет")
 def cmd_remove_start(message):
     msg = bot.reply_to(message, "✏️ Введи название предмета, который хочешь удалить, в формате: Weapon name | Skin name")
     bot.register_next_step_handler(msg, process_remove_item)
@@ -133,7 +143,7 @@ def process_remove_item(message):
     else:
         bot.reply_to(message, f"❌ «{item}» не найден в списке.")
 
-@bot.message_handler(commands=["show_items"])
+@bot.message_handler(func=lambda m: m.text == "📋 Показать список предметов")
 def cmd_show(message):
     items = load_check_items()
     if not items:
